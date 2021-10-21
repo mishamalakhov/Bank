@@ -7,11 +7,13 @@ import android.malakhov.bank.databinding.FragmentCurrencyBinding
 import android.malakhov.bank.ui.MainActivity
 import android.malakhov.bank.ui.сurrency.recycler.MyAdapter
 import android.os.Bundle
+import android.util.Log
 import androidx.fragment.app.Fragment
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.widget.ProgressBar
+import android.widget.TextView
 import androidx.databinding.DataBindingUtil
 import androidx.lifecycle.ViewModelProvider
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -30,6 +32,7 @@ class CurrencyFragment : Fragment() {
     private var progressBar: ProgressBar? = null    //progressBar
     private var dates = ArrayList<String>()     //List consist of start date and end date
     private var settings = ArrayList<SettingsEntity>()  //Settings list from SettingsFragment
+    private var error: TextView? = null     //Error message textView
 
 
     override fun onCreateView(
@@ -49,11 +52,15 @@ class CurrencyFragment : Fragment() {
 
         //get list of currencies
         GlobalScope.launch(Dispatchers.Main) {
-            list.addAll(viewModel.getCurrencies(requireActivity()))
-            dates.addAll(viewModel.getDates())
+            list.addAll(viewModel.getCurrencies(this@CurrencyFragment))
+
+            //If list size > 0 so we load dates of currencies
+            //and set visibility of settings btn = VISIBLE
+            if (list.size > 0)
+                dates.addAll(viewModel.getDates())
+            (activity as MainActivity).setSettingBtnVisible(View.VISIBLE)
             progressBar?.visibility = View.INVISIBLE
             adapter?.notifyDataSetChanged()
-            (activity as MainActivity).setSettingBtnVisible()
         }
         return binding.root
     }
@@ -78,12 +85,20 @@ class CurrencyFragment : Fragment() {
         recycler = binding.recycler
         adapter = MyAdapter(list, dates)
         progressBar = binding.progressBar
+        error = binding.error
         viewModel = ViewModelProvider(this).get(CurrencyViewModel::class.java)
     }
 
     fun setSettings(list: ArrayList<SettingsEntity>) {
         settings.clear()
         settings.addAll(list)
+    }
+
+    //Show error message
+    fun showError(){
+        progressBar?.visibility = View.INVISIBLE
+        error?.visibility = View.VISIBLE
+        (activity as MainActivity).setSettingBtnVisible(View.INVISIBLE)
     }
 }
 

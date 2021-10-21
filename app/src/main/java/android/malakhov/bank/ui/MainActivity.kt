@@ -30,8 +30,8 @@ class MainActivity : AppCompatActivity() {
         settings.addAll(list)
     }
 
-    fun setSettingBtnVisible(){
-        settingsBtn?.visibility = View.VISIBLE
+    fun setSettingBtnVisible(vis: Int){
+        settingsBtn?.visibility = vis
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

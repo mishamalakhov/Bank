@@ -8,8 +8,10 @@ import android.malakhov.bank.data.model.SettingsEntity
 import android.malakhov.bank.data.repository.SqLiteDB
 import android.util.Log
 import androidx.lifecycle.ViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.GlobalScope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.*
 import kotlin.collections.ArrayList
@@ -21,6 +23,7 @@ class CurrencyViewModel : ViewModel() {
     private var ratesEnd: DailyExRates? = null
     var dateStart: String? = null
     var dateEnd: String? = null
+
 
 
     suspend fun getCurrenciesBySettings(
@@ -46,25 +49,31 @@ class CurrencyViewModel : ViewModel() {
 
 
     //Get Currencies from SqLite
-    suspend fun getCurrencies(context: Context): ArrayList<CurrencyForDB> {
+    suspend fun getCurrencies(fragment: CurrencyFragment): ArrayList<CurrencyForDB> {
         val currList =
             ArrayList<CurrencyForDB>()  //List of currencies, which will shows in recycler
 
+
+        val context = fragment.context
+
         GlobalScope.async {
 
-            loadCurrenciesFromNetwork(context, 0)
+            loadCurrenciesFromNetwork(fragment, 0)
 
-            //Get currencies from db according to settings from SettingsDB.
-            //If switch = true, so we get this currency from DB
-            val settingsList = ArrayList<SettingsEntity>()
-            settingsList.addAll(SqLiteDB.getAppDB(context)?.settingsDao()?.getAll()!!)
-            currList.addAll(getCurrenciesBySettings(settingsList, context))
+            //IF we get error from server so we return empty list
+            if(ratesStart != null || ratesEnd != null){
+                //Get currencies from db according to settings from SettingsDB.
+                //If switch = true, so we get this currency from DB
+                val settingsList = ArrayList<SettingsEntity>()
+                settingsList.addAll(SqLiteDB.getAppDB(context!!)?.settingsDao()?.getAll()!!)
+                currList.addAll(getCurrenciesBySettings(settingsList, context))
+            }
         }.await()
         return currList
     }
 
     //Get Currencies from Api
-    private suspend fun loadCurrenciesFromNetwork(context: Context, daysCount: Int) {
+    private suspend fun loadCurrenciesFromNetwork(fragment: CurrencyFragment, daysCount: Int) {
 
         val sdf = SimpleDateFormat("MM/dd/yyyy")    //date format
         val cal = Calendar.getInstance()    //calendar
@@ -82,27 +91,34 @@ class CurrencyViewModel : ViewModel() {
                     ?.getCurrencyApi()
                     ?.getList(dateEnd!!)
                     ?.execute()?.body()
-            } catch (e: Exception) {
 
+                //get today or yesterday info
+                try {
+                    ratesStart = NetworkService.getInstance()
+                        ?.getCurrencyApi()
+                        ?.getList(dateStart!!)
+                        ?.execute()?.body()
+                    loadCurrenciesToDB(fragment.requireContext())
+                } catch (e: Exception) { //Show error message from service
+                    showError(fragment)
+                }
+            } catch (e: Exception) {
                 //if service don't have info about tomorrow currencies
                 // so we try to get yesterday - today info
                 if (e.toString().contains("Unable to satisfy")) {
-                    loadCurrenciesFromNetwork(context, -1)
+                    loadCurrenciesFromNetwork(fragment, -1)
+                }else{
+                    showError(fragment)
                 }
             }
-
-            //get today or yesterday info
-            try {
-                ratesStart = NetworkService.getInstance()
-                    ?.getCurrencyApi()
-                    ?.getList(dateStart!!)
-                    ?.execute()?.body()
-            } catch (e: Exception) {
-
-            }
         }.await()
-        loadCurrenciesToDB(context)
     }
+
+    //Show message error if service give us error response
+    private fun showError(fragment: CurrencyFragment){
+        GlobalScope.launch(Dispatchers.Main) { fragment.showError() }
+    }
+
 
     //Load Currencies to sqLite
     private suspend fun loadCurrenciesToDB(context: Context) {
